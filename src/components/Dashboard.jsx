@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { INITIAL_MATERIALS } from '../data/materialsData';
+import { answerWithSemanticRag } from '../ai/nlpEngine';
 
 const formatMarkdownText = (text) => {
   if (!text) return null;
@@ -208,23 +209,8 @@ const Dashboard = () => {
   };
 
   const generateAiResponse = (question, material) => {
-    const q = question.toLowerCase();
-    if (q.includes('plan') || q.includes('structur') || q.includes('rezumat') || q.includes('scurt')) {
-      return `Iată **planul recapitulativ pentru Bac** la **„${material.title}”**:\n\n` +
-        (material.keyPoints || []).map((pt, i) => `${i + 1}. **${pt}**`).join('\n') +
-        `\n\n**Sfat pentru punctaj maxim (30p):** Respectă ordinea reperelor din barem (încadrare, temă + 2 secvențe comentate, 2 elemente de compoziție și concluzie) și scrie minimum 400 de cuvinte!`;
-    }
-    if (q.includes('test') || q.includes('intreb') || q.includes('întreb') || q.includes('subiect')) {
-      return `**Cerință tip Subiectul al III-lea pentru antrenament:**\n\n> *Redactează un eseu de minimum 400 de cuvinte în care să prezinți particularitățile ${
-        material.subject === 'Romanian'
-          ? `operei studiate în „${material.title}” (${material.author || ''})`
-          : `temei istorice „${material.title}”`
-      }.*\n\n**Cum să începi:** Deschide cu o frază amplă despre contextul epocii și încadrarea tematică, apoi dezvoltă cele două secvențe reprezentative din tab-ul **Material de Studiu**!`;
-    }
-    return `Pentru **„${material.title}”** (${material.category}):\n\n` +
-      `• **Ideea centrală:** ${material.description}\n` +
-      `• **Reper esențial:** ${(material.keyPoints && material.keyPoints[0]) || ''}\n` +
-      `• **Recomandare:** Verifică tab-ul **Test Grilă** din această fereastră pentru a-ți fixa noțiunile cheie!`;
+    const rag = answerWithSemanticRag(question, material?.id);
+    return rag.answer;
   };
 
   const handleSendAiMessage = async (customPrompt) => {

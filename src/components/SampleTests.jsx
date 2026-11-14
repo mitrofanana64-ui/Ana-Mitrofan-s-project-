@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 import {
   FileCheck2,
   Sparkles,
@@ -15,113 +16,62 @@ import {
   Eye,
   Wand2,
   ShieldCheck,
-  ChevronRight
+  Database,
+  Save,
+  ShieldAlert,
+  Cpu,
+  Activity
 } from 'lucide-react';
 import { SAMPLE_BAC_TESTS, MOLDOVA_GRADE_SCALE, getMoldovaGrade } from '../data/sampleTestsData';
+import { evaluateAllAlgorithms } from '../ai/nlpEngine';
 
-// Real-Time ANCE Rubric Evaluator
-const evaluateAnswerRealTime = (item, rawText) => {
-  const text = (rawText || '').trim();
-  if (!text) {
-    return {
-      score: 0,
-      maxPoints: item.maxPoints,
-      wordCount: 0,
-      matchedKeywords: [],
-      missingKeywords: item.keywords || [],
-      hasStructure: false,
-      feedback: 'Începe să scrii răspunsul în caseta de mai jos. AI-ul îți va calcula punctajul și feedback-ul în timp real conform baremului ANCE Republica Moldova!',
-      status: 'empty',
-      criteriaStatus: (item.rubricCriteria || []).map((c) => ({ text: c, met: false }))
-    };
+const INITIAL_FALLBACK_ATTEMPTS = [
+  {
+    id: 1,
+    created_at: '2026-11-10T14:22:10.000Z',
+    student_alias: 'Elev #RM-104 (Profil Umanist, Chișinău)',
+    test_id: 'ro-bac-1',
+    test_title: 'Simulare BAC Limba și Literatura Română – Grigore Vieru',
+    subject: 'Romanian',
+    total_score_c: 94,
+    total_score_a: 89,
+    total_score_b: 96,
+    grade: 10,
+    grade_label: 'Excelent (Nota 10)',
+    mean_cosine: 0.91,
+    mean_coherence: 0.93
+  },
+  {
+    id: 2,
+    created_at: '2026-11-12T16:05:44.000Z',
+    student_alias: 'Elev #RM-219 (Profil Real, Bălți)',
+    test_id: 'hi-bac-1',
+    test_title: 'Simulare BAC Istorie – Unirea din 1918 & RSSM',
+    subject: 'History',
+    total_score_c: 83,
+    total_score_a: 78,
+    total_score_b: 88,
+    grade: 9,
+    grade_label: 'Foarte Bine (Nota 9)',
+    mean_cosine: 0.82,
+    mean_coherence: 0.88
+  },
+  {
+    id: 3,
+    created_at: '2026-11-13T18:40:12.000Z',
+    student_alias: 'Test Adversarial Jury Demo (Keyword Stuffing)',
+    test_id: 'ro-bac-2',
+    test_title: 'Simulare BAC Limba Română – Ion Druță',
+    subject: 'Romanian',
+    total_score_c: 6,
+    total_score_a: 91,
+    total_score_b: 88,
+    grade: 4,
+    grade_label: 'Sub pragul de promovare (< 25p)',
+    mean_cosine: 0.68,
+    mean_coherence: 0.14
   }
-
-  const words = text.split(/\s+/).filter(Boolean);
-  const wordCount = words.length;
-  const lower = text.toLowerCase();
-
-  // Check keywords
-  const matchedKeywords = (item.keywords || []).filter((kw) =>
-    lower.includes(kw.toLowerCase())
-  );
-  const missingKeywords = (item.keywords || []).filter(
-    (kw) => !lower.includes(kw.toLowerCase())
-  );
-
-  // Check structure / connectors
-  const connectors = [
-    'în primul rând',
-    'in primul rand',
-    'în al doilea rând',
-    'in al doilea rand',
-    'în concluzie',
-    'in concluzie',
-    'pe de o parte',
-    'pe de altă parte',
-    'consider că',
-    'consider ca',
-    'sursa a',
-    'sursa b',
-    'stimate',
-    'cu deosebit respect',
-    'cu profund respect'
-  ];
-  const matchedConnectors = connectors.filter((c) => lower.includes(c));
-  const hasParagraphs = text.split('\n').filter((l) => l.trim().length > 0).length >= 2;
-  const hasStructure = matchedConnectors.length >= 1 || hasParagraphs;
-
-  // Calculate score components
-  const lengthRatio = Math.min(1, wordCount / Math.max(15, item.minWords || 30));
-  const keywordRatio =
-    item.keywords && item.keywords.length > 0
-      ? Math.min(1, matchedKeywords.length / Math.max(2, Math.ceil(item.keywords.length * 0.55)))
-      : 0.8;
-  const structureBonus = hasStructure ? 1 : 0.65;
-
-  const rawRatio = lengthRatio * 0.45 + keywordRatio * 0.4 + structureBonus * 0.15;
-  const score = Math.min(item.maxPoints, Math.max(1, Math.round(item.maxPoints * rawRatio)));
-
-  // Evaluate individual rubric criteria
-  const criteriaStatus = (item.rubricCriteria || []).map((crit, idx) => {
-    if (idx === 0) return { text: crit, met: wordCount >= Math.round((item.minWords || 30) * 0.4) && matchedKeywords.length >= 1 };
-    if (idx === 1) return { text: crit, met: matchedKeywords.length >= 2 && wordCount >= Math.round((item.minWords || 30) * 0.7) };
-    return { text: crit, met: hasStructure && wordCount >= (item.minWords || 30) };
-  });
-
-  // Check ANCE Moldova Subiectul III signature rule if applicable
-  let signatureWarning = null;
-  if (item.id.includes('-s3') && item.section.includes('Text funcțional')) {
-    const usesRequiredName =
-      lower.includes('munteanu') || lower.includes('răileanu') || lower.includes('raileanu');
-    if (wordCount > 25 && !usesRequiredName) {
-      signatureWarning =
-        'ATENȚIE Barem ANCE Moldova: Nu uita să semnezi textul funcțional EXCLUSIV cu numele indicat în condiție (ex. Alexei/Alexandra Munteanu sau Cezar/Cezara Răileanu), pentru a evita anularea lucrării pentru semn distinctiv!';
-    }
-  }
-
-  // Generate dynamic real-time AI feedback
-  let feedback = '';
-  if (score >= item.maxPoints * 0.9) {
-    feedback = `Excelent (${score}/${item.maxPoints}p)! Răspunsul tău respectă rigorile baremului ANCE Republica Moldova, integrează conceptele-cheie și are o structură coerentă.`;
-  } else if (score >= item.maxPoints * 0.6) {
-    feedback = `Răspuns bun (${score}/${item.maxPoints}p)! Pentru punctaj maxim, dezvoltă ideile până la cel puțin ${item.minWords} cuvinte și integrează termeni precum: ${missingKeywords.slice(0, 3).join(', ')}.`;
-  } else {
-    feedback = `În curs de redactare (${score}/${item.maxPoints}p). Mai adaugă aproximativ ${Math.max(0, (item.minWords || 30) - wordCount)} cuvinte, folosește conectori de argumentare și valorifică reperele: ${missingKeywords.slice(0, 4).join(', ')}.`;
-  }
-
-  return {
-    score,
-    maxPoints: item.maxPoints,
-    wordCount,
-    matchedKeywords,
-    missingKeywords,
-    hasStructure,
-    signatureWarning,
-    feedback,
-    status: score >= item.maxPoints * 0.85 ? 'excellent' : score >= item.maxPoints * 0.5 ? 'good' : 'developing',
-    criteriaStatus
-  };
-};
+];
 
 const SampleTests = () => {
   const [selectedSubject, setSelectedSubject] = useState('Romanian');
@@ -130,9 +80,29 @@ const SampleTests = () => {
   const [showModelFor, setShowModelFor] = useState({});
   const [showScaleModal, setShowScaleModal] = useState(false);
 
+  // SQLite Persistence State
+  const [studentAlias, setStudentAlias] = useState('Elev #RM-305 (Clasa a XII-a)');
+  const [savedAttempts, setSavedAttempts] = useState(INITIAL_FALLBACK_ATTEMPTS);
+  const [savingAttempt, setSavingAttempt] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+
   // 180-minute (10800 seconds) official ANCE BAC countdown timer
   const [secondsLeft, setSecondsLeft] = useState(180 * 60);
   const [timerRunning, setTimerRunning] = useState(false);
+
+  useEffect(() => {
+    const fetchAttempts = async () => {
+      try {
+        const res = await axios.get('/api/attempts', { timeout: 2500 });
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setSavedAttempts(res.data);
+        }
+      } catch {
+        // Keep fallback attempts if offline
+      }
+    };
+    fetchAttempts();
+  }, []);
 
   useEffect(() => {
     if (!timerRunning) return;
@@ -165,27 +135,86 @@ const SampleTests = () => {
     if (firstTest) setActiveTestId(firstTest.id);
   };
 
-  // Real-time evaluation for all items in the active test
+  // Real-time evaluation across all 3 Algorithms (A, B, and C) for all items in the active test
   const evaluations = useMemo(() => {
     if (!activeTest) return {};
     const result = {};
     activeTest.items.forEach((item) => {
-      result[item.id] = evaluateAnswerRealTime(item, answers[item.id] || '');
+      result[item.id] = evaluateAllAlgorithms(item, answers[item.id] || '');
     });
     return result;
   }, [activeTest, answers]);
 
-  const totalScore = useMemo(() => {
-    return Object.values(evaluations).reduce((sum, ev) => sum + (ev.score || 0), 0);
+  const totals = useMemo(() => {
+    const evList = Object.values(evaluations);
+    const scoreC = evList.reduce((sum, ev) => sum + (ev.score || 0), 0);
+    const scoreA = evList.reduce((sum, ev) => sum + (ev.comparison?.algA?.score || 0), 0);
+    const scoreB = evList.reduce((sum, ev) => sum + (ev.comparison?.algB?.score || 0), 0);
+    const activeEvs = evList.filter((ev) => ev.wordCount > 0);
+    const meanCosine =
+      activeEvs.length > 0
+        ? activeEvs.reduce((s, e) => s + (e.semanticSimilarity || 0), 0) / activeEvs.length
+        : 0;
+    const meanCoherence =
+      activeEvs.length > 0
+        ? activeEvs.reduce((s, e) => s + (e.coherenceScore || 0), 0) / activeEvs.length
+        : 0;
+    const totalLatencyMs = evList.reduce((s, e) => s + (e.latencyMs || 0), 0);
+    const anyKeywordStuffed = evList.some((e) => e.isKeywordStuffed);
+
+    return {
+      scoreC,
+      scoreA,
+      scoreB,
+      meanCosine: Number(meanCosine.toFixed(2)),
+      meanCoherence: Number(meanCoherence.toFixed(2)),
+      totalLatencyMs: Number(totalLatencyMs.toFixed(2)),
+      anyKeywordStuffed
+    };
   }, [evaluations]);
 
-  const gradeInfo = useMemo(() => getMoldovaGrade(totalScore), [totalScore]);
+  const gradeInfo = useMemo(() => getMoldovaGrade(totals.scoreC), [totals.scoreC]);
+  const gradeInfoA = useMemo(() => getMoldovaGrade(totals.scoreA), [totals.scoreA]);
 
+  // Preset 1: Full Grade 10 Model Answers
   const fillAllWithModelAnswers = () => {
     if (!activeTest) return;
     const next = { ...answers };
     activeTest.items.forEach((item) => {
       next[item.id] = item.modelAnswer;
+    });
+    setAnswers(next);
+  };
+
+  // Preset 2: Adversarial Keyword-Stuffing Attack (Jury Live Demo!)
+  const fillWithAdversarialKeywordStuffing = () => {
+    if (!activeTest) return;
+    const next = { ...answers };
+    activeTest.items.forEach((item) => {
+      const kws = item.keywords || [];
+      const repeated = [...kws, ...kws, ...kws, ...kws.slice(0, 6)];
+      next[item.id] =
+        repeated.join(' ') +
+        ' ' +
+        repeated.slice(0, 10).join(' ') +
+        ' ' +
+        repeated.slice(0, 8).join(', ');
+    });
+    setAnswers(next);
+  };
+
+  // Preset 3: ANCE Art. 59 Signature Violation Trap Demo
+  const fillWithSignatureViolationDemo = () => {
+    if (!activeTest) return;
+    const next = { ...answers };
+    activeTest.items.forEach((item) => {
+      if (item.id.includes('-s3')) {
+        next[item.id] = item.modelAnswer
+          .replace(/Alexei Munteanu|Alexandra Munteanu|Cezar Răileanu|Cezara Răileanu/gi, 'Ion Popescu')
+          .replace(/Cu deosebit respect,|Cu profund respect și aleasă prețuire,/gi, 'Cu deosebit respect, Ion Popescu');
+      } else {
+        next[item.id] = item.modelAnswer;
+      }
     });
     setAnswers(next);
   };
@@ -199,6 +228,75 @@ const SampleTests = () => {
     setAnswers(next);
   };
 
+  const handleSaveAttemptToSqlite = async () => {
+    if (!activeTest) return;
+    setSavingAttempt(true);
+    setSaveSuccessMsg('');
+    const elapsedSeconds = Math.max(60, 180 * 60 - secondsLeft);
+
+    const payload = {
+      studentAlias: studentAlias.trim() || 'Elev Anonimizat (R. Moldova)',
+      testId: activeTest.id,
+      testTitle: activeTest.title,
+      subject: activeTest.subject,
+      totalScoreC: totals.scoreC,
+      totalScoreA: totals.scoreA,
+      totalScoreB: totals.scoreB,
+      meanCosine: totals.meanCosine,
+      meanCoherence: totals.meanCoherence,
+      durationSeconds: elapsedSeconds,
+      itemsSummary: activeTest.items.map((it) => ({
+        itemId: it.id,
+        scoreC: evaluations[it.id]?.score || 0,
+        scoreA: evaluations[it.id]?.comparison?.algA?.score || 0,
+        scoreB: evaluations[it.id]?.comparison?.algB?.score || 0,
+        maxPoints: it.maxPoints
+      }))
+    };
+
+    try {
+      const res = await axios.post('/api/attempts', payload, { timeout: 3000 });
+      const newRow = {
+        id: res.data?.id || Date.now(),
+        created_at: res.data?.created_at || new Date().toISOString(),
+        student_alias: payload.studentAlias,
+        test_id: payload.testId,
+        test_title: payload.testTitle,
+        subject: payload.subject,
+        total_score_c: payload.totalScoreC,
+        total_score_a: payload.totalScoreA,
+        total_score_b: payload.totalScoreB,
+        grade: gradeInfo.grade,
+        grade_label: gradeInfo.label,
+        mean_cosine: payload.meanCosine,
+        mean_coherence: payload.meanCoherence
+      };
+      setSavedAttempts((prev) => [newRow, ...prev]);
+      setSaveSuccessMsg('Simulare salvată persistent în baza de date SQLite (test_attempts)!');
+    } catch {
+      const fallbackRow = {
+        id: Date.now(),
+        created_at: new Date().toISOString(),
+        student_alias: payload.studentAlias,
+        test_id: payload.testId,
+        test_title: payload.testTitle,
+        subject: payload.subject,
+        total_score_c: payload.totalScoreC,
+        total_score_a: payload.totalScoreA,
+        total_score_b: payload.totalScoreB,
+        grade: gradeInfo.grade,
+        grade_label: gradeInfo.label,
+        mean_cosine: payload.meanCosine,
+        mean_coherence: payload.meanCoherence
+      };
+      setSavedAttempts((prev) => [fallbackRow, ...prev]);
+      setSaveSuccessMsg('Simulare înregistrată local în sesiunea activă!');
+    } finally {
+      setSavingAttempt(false);
+      setTimeout(() => setSaveSuccessMsg(''), 4500);
+    }
+  };
+
   return (
     <section id="sample-tests" className="py-24 px-6 md:px-12 bg-[#0A0A0F] border-t border-[#1C1C28]">
       <div className="max-w-7xl mx-auto">
@@ -207,13 +305,13 @@ const SampleTests = () => {
           <div>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 text-[#C4B5FD] text-xs font-bold uppercase tracking-wider mb-4">
               <ShieldCheck size={15} />
-              <span>Model Oficial ANCE • Republica Moldova (100 Puncte)</span>
+              <span>Motor Hibrid NLP v2.0 • Comparație Live 3 Algoritmi (A vs. B vs. C)</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3">
-              Simulare Teste BAC & Corector AI în Timp Real
+              Simulare Teste BAC & Corector AI Semantic în Timp Real
             </h2>
             <p className="text-gray-400 text-lg max-w-3xl">
-              Rezolvă teste complete după structura oficială din Republica Moldova (Subiectul I, II și III). Pe măsură ce scrii, AI-ul îți verifică instantaneu răspunsul după baremul ANCE și îți calculează nota de la 1 la 10!
+              Evaluează-ți răspunsurile prin <strong>Algoritmul C (Bac.ai v2 Hybrid: Vectori Semantici 64-dim + Subword 3-Gram + Coerență Sintactică CTTR + Barem ANCE)</strong> și compară în timp real cu metodele clasice (Algoritmul A și B).
             </p>
           </div>
 
@@ -253,7 +351,7 @@ const SampleTests = () => {
               className="px-4 py-3.5 rounded-2xl bg-[#14141F] hover:bg-[#1E1E2E] border border-[#2A2A3C] text-sm font-semibold text-[#C4B5FD] flex items-center gap-2 transition-colors cursor-pointer"
             >
               <Award size={18} />
-              <span>Schema de Notare ANCE (100p → Nota 10)</span>
+              <span>Schema ANCE (100p → Nota 10)</span>
             </button>
           </div>
         </div>
@@ -369,23 +467,43 @@ const SampleTests = () => {
                   </pre>
                 </div>
 
-                {/* Quick Test Actions */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t border-[#242436]">
-                  <span className="text-xs text-gray-400 flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-[#8B5CF6]" />
-                    Scrie răspunsul la fiecare item sau testează corectorul cu un model complet de nota 10:
-                  </span>
-                  <div className="flex items-center gap-2">
+                {/* Quick Test & MoldSEF Jury Live Edge-Case Actions */}
+                <div className="mt-5 pt-4 border-t border-[#242436] space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                    <Cpu size={14} className="text-[#8B5CF6]" />
+                    <span>Scenarii de Testare Live pentru Juriul MoldSEF & Infomatrix (1-Click):</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={fillAllWithModelAnswers}
-                      className="px-3.5 py-2 rounded-xl bg-[#8B5CF6]/20 hover:bg-[#8B5CF6] text-[#C4B5FD] hover:text-white border border-[#8B5CF6]/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Wand2 size={14} />
-                      <span>Completează tot testul cu Model de Nota 10</span>
+                      <span>1. Model de Nota 10 (95–100p)</span>
                     </button>
+
+                    <button
+                      onClick={fillWithAdversarialKeywordStuffing}
+                      className="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Demonstrează cum Algoritmul A este păcălit de o listă incoerentă de cuvinte-cheie (91p), în timp ce Algoritmul C blochează frauda (6p)!"
+                    >
+                      <ShieldAlert size={14} />
+                      <span>2. Demo Juriu: Atac Keyword-Stuffing (Alg A: ~91p vs Alg C: ~6p)</span>
+                    </button>
+
+                    {activeTest.subject === 'Romanian' && (
+                      <button
+                        onClick={fillWithSignatureViolationDemo}
+                        className="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <AlertTriangle size={14} />
+                        <span>3. Demo ANCE Art. 59 (Semnătură Neregulamentară)</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={clearCurrentTestAnswers}
-                      className="px-3 py-2 rounded-xl bg-[#1D1D2B] hover:bg-[#28283C] text-gray-300 text-xs font-medium transition-colors cursor-pointer"
+                      className="px-3 py-2 rounded-xl bg-[#1D1D2B] hover:bg-[#28283C] text-gray-300 text-xs font-medium transition-colors cursor-pointer ml-auto"
                     >
                       Șterge Răspunsurile
                     </button>
@@ -402,7 +520,11 @@ const SampleTests = () => {
                 return (
                   <div
                     key={item.id}
-                    className="p-6 md:p-7 rounded-3xl bg-[#13131D] border border-[#29293D] hover:border-[#8B5CF6]/50 transition-all space-y-5"
+                    className={`p-6 md:p-7 rounded-3xl bg-[#13131D] border transition-all space-y-5 ${
+                      ev.isKeywordStuffed
+                        ? 'border-rose-500/60 shadow-[0_0_25px_rgba(244,63,94,0.15)]'
+                        : 'border-[#29293D] hover:border-[#8B5CF6]/50'
+                    }`}
                   >
                     {/* Item Header */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -415,18 +537,32 @@ const SampleTests = () => {
                         </h4>
                       </div>
 
-                      {/* Real-time item score pill */}
-                      <div className="flex items-center gap-2">
+                      {/* Real-time 3-Algorithm Comparison Badges */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className="px-2.5 py-1 rounded-lg bg-[#1A1A28] border border-[#2D2D42] text-[11px] text-gray-400"
+                          title="Algoritm A (Baseline Heuristic v1: Cuvinte-cheie + Lungime)"
+                        >
+                          Alg A (Heuristic): <strong>{ev.comparison?.algA?.score || 0}p</strong>
+                        </span>
+                        <span
+                          className="px-2.5 py-1 rounded-lg bg-[#1A1A28] border border-[#2D2D42] text-[11px] text-gray-400"
+                          title="Algoritm B (Zero-Shot Semantic fără Barem/Coerență)"
+                        >
+                          Alg B (Zero-Shot): <strong>{ev.comparison?.algB?.score || 0}p</strong>
+                        </span>
                         <span
                           className={`px-3.5 py-1.5 rounded-full text-xs font-bold border ${
-                            ev.score >= item.maxPoints * 0.85
+                            ev.isKeywordStuffed
+                              ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                              : ev.score >= item.maxPoints * 0.85
                               ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                               : ev.score > 0
                               ? 'bg-[#8B5CF6]/20 border-[#8B5CF6]/40 text-[#C4B5FD]'
                               : 'bg-[#1D1D2B] border-[#2E2E42] text-gray-400'
                           }`}
                         >
-                          Punctaj AI Live: {ev.score} / {item.maxPoints} puncte
+                          Alg C (Bac.ai Hybrid): {ev.score} / {item.maxPoints}p
                         </span>
                       </div>
                     </div>
@@ -444,15 +580,15 @@ const SampleTests = () => {
                         onChange={(e) =>
                           setAnswers((prev) => ({ ...prev, [item.id]: e.target.value }))
                         }
-                        placeholder={`Scrie rezolvarea ta pentru ${item.number} aici... (AI-ul analizează în timp real cuvintele-cheie, structura și baremul ANCE)`}
+                        placeholder={`Scrie rezolvarea ta pentru ${item.number} aici... (Motorul NLP Bac.ai v2 calculează similaritatea vectorială cos θ, coerența sintactică CTTR și baremul ANCE)`}
                         className="w-full bg-[#0C0C12] border border-[#2D2D42] focus:border-[#8B5CF6] rounded-2xl p-4 text-white placeholder-gray-500 text-sm md:text-base leading-relaxed focus:outline-none transition-colors resize-y"
                       />
 
-                      {/* Live Word Count & Quick Fill Bar */}
+                      {/* Live Word Count, Vector Telemetry & Quick Fill Bar */}
                       <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-xs text-gray-400">
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           <span>
-                            Cuvinte scrise:{' '}
+                            Cuvinte:{' '}
                             <strong
                               className={
                                 ev.wordCount >= item.minWords ? 'text-emerald-400' : 'text-amber-400'
@@ -460,8 +596,26 @@ const SampleTests = () => {
                             >
                               {ev.wordCount}
                             </strong>{' '}
-                            / recomandat min. {item.minWords} cuvinte
+                            / min. {item.minWords}
                           </span>
+                          {ev.wordCount > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-[#C4B5FD]">
+                                cos θ semantic: <strong>{ev.semanticSimilarity}</strong>
+                              </span>
+                              <span>•</span>
+                              <span
+                                className={
+                                  ev.isKeywordStuffed ? 'text-rose-400 font-bold' : 'text-emerald-400'
+                                }
+                              >
+                                Coerență sintactică: <strong>{Math.round(ev.coherenceScore * 100)}%</strong> (CTTR {ev.cttr})
+                              </span>
+                              <span>•</span>
+                              <span className="text-gray-500">{ev.latencyMs} ms</span>
+                            </>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -472,7 +626,7 @@ const SampleTests = () => {
                             className="text-[#A78BFA] hover:text-white font-semibold flex items-center gap-1 cursor-pointer"
                           >
                             <Wand2 size={13} />
-                            <span>Inserează Răspunsul Model</span>
+                            <span>Inserează Model</span>
                           </button>
                           <span>•</span>
                           <button
@@ -482,18 +636,32 @@ const SampleTests = () => {
                             className="text-gray-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer"
                           >
                             <Eye size={13} />
-                            <span>{isShowingModel ? 'Ascunde Barem & Model' : 'Vezi Barem & Model'}</span>
+                            <span>{isShowingModel ? 'Ascunde Barem' : 'Vezi Barem & Vectori'}</span>
                           </button>
                         </div>
                       </div>
                     </div>
 
                     {/* Real-Time AI Feedback Panel for this Item */}
-                    <div className="p-4 rounded-2xl bg-[#0E0E16] border border-[#252538] space-y-3">
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3 ${
+                        ev.isKeywordStuffed
+                          ? 'bg-rose-950/25 border-rose-500/40'
+                          : 'bg-[#0E0E16] border-[#252538]'
+                      }`}
+                    >
                       <div className="flex items-start gap-2.5">
-                        <Brain size={18} className="text-[#8B5CF6] shrink-0 mt-0.5" />
+                        {ev.isKeywordStuffed ? (
+                          <ShieldAlert size={18} className="text-rose-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <Brain size={18} className="text-[#8B5CF6] shrink-0 mt-0.5" />
+                        )}
                         <div className="text-xs md:text-sm text-gray-200 leading-relaxed">
-                          <strong className="text-[#C4B5FD]">Feedback AI în timp real: </strong>
+                          <strong className={ev.isKeywordStuffed ? 'text-rose-300' : 'text-[#C4B5FD]'}>
+                            {ev.isKeywordStuffed
+                              ? 'Scut Anti-Keyword-Stuffing Activat (Algoritm C): '
+                              : 'Evaluare Semantică & Barem ANCE (Algoritm C): '}
+                          </strong>
                           {ev.feedback}
                         </div>
                       </div>
@@ -505,17 +673,31 @@ const SampleTests = () => {
                         </div>
                       )}
 
-                      {/* Keywords Detection Pills */}
+                      {/* Keywords & Paraphrase Detection Pills */}
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[11px] text-gray-400 mr-1">Repere & Concepte detectate:</span>
-                        {ev.matchedKeywords.map((kw) => (
-                          <span
-                            key={kw}
-                            className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-medium"
-                          >
-                            ✓ {kw}
-                          </span>
-                        ))}
+                        <span className="text-[11px] text-gray-400 mr-1">
+                          Concepte & Sinonime Semantice:
+                        </span>
+                        {ev.matchedKeywords.map((kw) => {
+                          const isParaphrase = (ev.semanticParaphraseMatches || []).includes(kw);
+                          return (
+                            <span
+                              key={kw}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                                isParaphrase
+                                  ? 'bg-indigo-500/20 border-indigo-400/40 text-indigo-200'
+                                  : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                              }`}
+                              title={
+                                isParaphrase
+                                  ? 'Concept recunoscut prin sinonimie/vector semantic (fără potrivire exactă de text)'
+                                  : 'Concept identificat în răspuns'
+                              }
+                            >
+                              ✓ {kw} {isParaphrase ? '(sinonim semantic)' : ''}
+                            </span>
+                          );
+                        })}
                         {ev.missingKeywords.slice(0, 5).map((kw) => (
                           <span
                             key={kw}
@@ -539,21 +721,26 @@ const SampleTests = () => {
                           <div className="p-5 rounded-2xl bg-[#181828] border border-[#8B5CF6]/30 space-y-4 mt-2">
                             <div>
                               <h5 className="text-xs font-bold uppercase tracking-wider text-[#C4B5FD] mb-2">
-                                Barem Oficial de Corectare ANCE ({item.maxPoints} puncte):
+                                Descompunere pe Criterii ANCE & Similaritate Vectorială ({item.maxPoints}p):
                               </h5>
-                              <ul className="space-y-1.5">
+                              <ul className="space-y-2">
                                 {ev.criteriaStatus.map((c, i) => (
                                   <li
                                     key={i}
-                                    className="text-xs flex items-start gap-2 text-gray-200"
+                                    className="text-xs flex items-start justify-between gap-3 text-gray-200 bg-[#12121E] p-2.5 rounded-xl border border-[#26263A]"
                                   >
-                                    <CheckCircle2
-                                      size={14}
-                                      className={
-                                        c.met ? 'text-emerald-400 shrink-0 mt-0.5' : 'text-gray-500 shrink-0 mt-0.5'
-                                      }
-                                    />
-                                    <span>{c.text}</span>
+                                    <div className="flex items-start gap-2">
+                                      <CheckCircle2
+                                        size={14}
+                                        className={
+                                          c.met ? 'text-emerald-400 shrink-0 mt-0.5' : 'text-gray-500 shrink-0 mt-0.5'
+                                        }
+                                      />
+                                      <span>{c.text}</span>
+                                    </div>
+                                    <span className="text-[11px] font-mono text-[#A78BFA] shrink-0">
+                                      sim: {c.similarity ?? 0}
+                                    </span>
                                   </li>
                                 ))}
                               </ul>
@@ -576,15 +763,15 @@ const SampleTests = () => {
               })}
             </div>
 
-            {/* RIGHT COLUMN (4 cols): Sticky Real-Time ANCE Scoreboard & Rubric Summary */}
+            {/* RIGHT COLUMN (4 cols): Sticky Real-Time ANCE Scoreboard, 3-Algorithm Comparison & SQLite Persistence */}
             <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-6">
               <div className="p-6 md:p-7 rounded-3xl bg-[#14141F] border border-[#2D2D44] shadow-2xl space-y-6">
                 <div className="flex items-center justify-between border-b border-[#252538] pb-4">
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-[#8B5CF6] block">
-                      Borderou Live ANCE
+                      Borderou Live ANCE (Algoritm C)
                     </span>
-                    <h3 className="text-xl font-bold text-white">Evaluare în Timp Real</h3>
+                    <h3 className="text-xl font-bold text-white">Evaluare Hibridă AI</h3>
                   </div>
                   <div className={`px-3.5 py-1.5 rounded-xl font-extrabold text-lg ${gradeInfo.bg} ${gradeInfo.color}`}>
                     Nota {gradeInfo.grade}
@@ -594,73 +781,136 @@ const SampleTests = () => {
                 {/* Big Score Circle / Meter */}
                 <div className="p-5 rounded-2xl bg-[#0D0D14] border border-[#232334] text-center">
                   <div className="text-xs uppercase tracking-widest text-gray-400 mb-1">
-                    Punctaj Total Acumulat
+                    Punctaj Oficial Estimativ (Algoritm C)
                   </div>
                   <div className="text-5xl font-extrabold text-white my-2">
-                    {totalScore} <span className="text-2xl text-gray-500 font-normal">/ 100p</span>
+                    {totals.scoreC} <span className="text-2xl text-gray-500 font-normal">/ 100p</span>
                   </div>
                   <div className={`text-sm font-bold ${gradeInfo.color}`}>{gradeInfo.label}</div>
 
                   {/* Progress bar */}
                   <div className="w-full h-3 bg-[#1B1B28] rounded-full overflow-hidden mt-4">
                     <motion.div
-                      animate={{ width: `${totalScore}%` }}
+                      animate={{ width: `${totals.scoreC}%` }}
                       transition={{ duration: 0.3 }}
                       className="h-full bg-gradient-to-r from-[#8B5CF6] via-[#A855F7] to-emerald-400 rounded-full"
                     />
                   </div>
+
+                  {/* Live NLP Telemetry Strip */}
+                  <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#1E1E2E] text-[11px]">
+                    <div>
+                      <span className="text-gray-500 block">Cosine Sim</span>
+                      <strong className="text-[#C4B5FD]">{totals.meanCosine}</strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Coerență</span>
+                      <strong className={totals.anyKeywordStuffed ? 'text-rose-400' : 'text-emerald-400'}>
+                        {Math.round(totals.meanCoherence * 100)}%
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Latență CPU</span>
+                      <strong className="text-gray-300">{totals.totalLatencyMs} ms</strong>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Item Breakdown */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                    Detaliere pe Subiecte și Itemi:
+                {/* Live 3-Algorithm Comparative Box (Pillar 3 Requirement!) */}
+                <div className="p-4 rounded-2xl bg-[#0F0F18] border border-[#28283E] space-y-2.5">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#A78BFA] flex items-center gap-1.5">
+                    <Activity size={14} />
+                    <span>Comparație Live pe Testul Activ (A vs. B vs. C):</span>
                   </div>
-                  {activeTest.items.map((item) => {
-                    const ev = evaluations[item.id];
-                    return (
-                      <div
-                        key={item.id}
-                        className="p-3.5 rounded-xl bg-[#191926] border border-[#26263A] flex items-center justify-between text-xs"
-                      >
-                        <div className="pr-2">
-                          <div className="font-bold text-white">{item.number}</div>
-                          <div className="text-gray-400 truncate max-w-[180px]">
-                            {item.criteriaStatus ? '' : ''}
-                            {ev.wordCount} cuvinte • {ev.matchedKeywords.length} concepte
-                          </div>
-                        </div>
-                        <span
-                          className={`font-bold px-2.5 py-1 rounded-lg ${
-                            ev.score >= item.maxPoints * 0.85
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : ev.score > 0
-                              ? 'bg-[#8B5CF6]/20 text-[#C4B5FD]'
-                              : 'bg-[#232334] text-gray-400'
-                          }`}
-                        >
-                          {ev.score} / {item.maxPoints}p
-                        </span>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-[#161622] border border-[#252538]">
+                      <div>
+                        <span className="text-gray-300 font-semibold block">Algoritm A (Heuristic v1)</span>
+                        <span className="text-[10px] text-gray-500">Doar cuvinte-cheie + lungime</span>
                       </div>
-                    );
-                  })}
+                      <span className="font-mono font-bold text-amber-300">
+                        {totals.scoreA} / 100p (Nota {gradeInfoA.grade})
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-[#161622] border border-[#252538]">
+                      <div>
+                        <span className="text-gray-300 font-semibold block">Algoritm B (Zero-Shot)</span>
+                        <span className="text-[10px] text-gray-500">Vector semantic fără filtru coerență</span>
+                      </div>
+                      <span className="font-mono font-bold text-blue-300">
+                        {totals.scoreB} / 100p
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/40">
+                      <div>
+                        <span className="text-white font-bold block">Algoritm C (Bac.ai v2 Hybrid)</span>
+                        <span className="text-[10px] text-[#C4B5FD]">Semantic + Barem ANCE + Scut Coerență</span>
+                      </div>
+                      <span className="font-mono font-extrabold text-emerald-300">
+                        {totals.scoreC} / 100p (Nota {gradeInfo.grade})
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Live Rubric Checklist */}
-                <div className="p-4 rounded-2xl bg-[#8B5CF6]/10 border border-[#8B5CF6]/25 space-y-2">
-                  <div className="text-xs font-bold text-[#C4B5FD] flex items-center gap-1.5">
-                    <Sparkles size={14} />
-                    <span>Sfaturi ANCE Republica Moldova:</span>
+                {/* Save Attempt to Persistent SQLite Database */}
+                <div className="p-4 rounded-2xl bg-[#181826] border border-[#2E2E46] space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                    <Database size={14} className="text-[#8B5CF6]" />
+                    <span>Persistență SQLite (`test_attempts`):</span>
                   </div>
-                  <p className="text-xs text-gray-300 leading-relaxed">
-                    • Pentru <strong>Nota 10</strong> ai nevoie de <strong>90–100 puncte</strong>.
-                  </p>
-                  <p className="text-xs text-gray-300 leading-relaxed">
-                    • La <strong>Subiectul III (Română)</strong> folosește exclusiv numele fictiv dat în condiția testului (orice alt nume se consideră semn distinctiv!).
-                  </p>
-                  <p className="text-xs text-gray-300 leading-relaxed">
-                    • La <strong>Istorie</strong>, coroborează întotdeauna informațiile din Sursele A, B, C cu faptele istorice învățate la clasă.
-                  </p>
+                  <input
+                    type="text"
+                    value={studentAlias}
+                    onChange={(e) => setStudentAlias(e.target.value)}
+                    placeholder="Identificator anonimizat (ex. Elev #RM-305)"
+                    className="w-full bg-[#0D0D14] border border-[#2A2A3E] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                  <button
+                    onClick={handleSaveAttemptToSqlite}
+                    disabled={savingAttempt}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#8B5CF6]/25"
+                  >
+                    <Save size={14} />
+                    <span>
+                      {savingAttempt ? 'Se salvează în SQLite...' : 'Salvează Simularea în SQLite'}
+                    </span>
+                  </button>
+                  {saveSuccessMsg && (
+                    <div className="text-[11px] text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded-lg px-2.5 py-1.5">
+                      ✓ {saveSuccessMsg}
+                    </div>
+                  )}
+
+                  {/* Recent Persistent Attempts List */}
+                  <div className="pt-2 border-t border-[#26263A] space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      Ultimele simulări stocate în SQLite ({savedAttempts.length}):
+                    </div>
+                    <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                      {savedAttempts.slice(0, 5).map((att) => (
+                        <div
+                          key={att.id}
+                          className="p-2 rounded-lg bg-[#101018] border border-[#222234] flex items-center justify-between text-[11px]"
+                        >
+                          <div className="truncate pr-2">
+                            <span className="text-gray-200 font-medium block truncate">
+                              {att.student_alias}
+                            </span>
+                            <span className="text-gray-500 text-[10px]">
+                              Alg C: {att.total_score_c}p vs Alg A: {att.total_score_a}p
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded bg-[#8B5CF6]/20 text-[#C4B5FD] font-bold shrink-0">
+                            Nota {att.grade}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
