@@ -702,17 +702,23 @@ export function evaluateAlgorithmC(item, rawText = '') {
   const modelSim = computeSemanticSimilarity(text, item.modelAnswer);
 
   // 2. Per-criterion semantic evaluation against each ANCE rubric criterion
-  const criteriaStatus = (item.rubricCriteria || []).map((crit) => {
-    const critSim = computeSemanticSimilarity(text, `${crit} ${item.modelAnswer}`);
-    const calibratedCritSim = Math.min(1, critSim.combined * 1.42);
-    const met = calibratedCritSim >= 0.48 && wordCount >= Math.round((item.minWords || 30) * 0.45);
+  const criteriaStatus = (item.rubricCriteria || []).map((crit, idx) => {
+    const critSim = computeSemanticSimilarity(text, crit);
+    const modelCritSim = computeSemanticSimilarity(text, `${crit} ${item.modelAnswer}`);
+    const blendedCritSim = Math.min(1, critSim.combined * 0.65 + modelCritSim.combined * 0.55);
+    const minWordsForCrit = Math.round((item.minWords || 30) * (0.35 + idx * 0.2));
+    const met = blendedCritSim >= 0.36 && wordCount >= minWordsForCrit;
     return {
       text: crit,
       met,
-      similarity: Number(calibratedCritSim.toFixed(2))
+      similarity: Number(blendedCritSim.toFixed(2))
     };
   });
 
+  const criteriaMetRatio =
+    criteriaStatus.length > 0
+      ? criteriaStatus.filter((c) => c.met).length / criteriaStatus.length
+      : 0.75;
   const criteriaMeanSim =
     criteriaStatus.length > 0
       ? criteriaStatus.reduce((s, c) => s + c.similarity, 0) / criteriaStatus.length
@@ -723,18 +729,23 @@ export function evaluateAlgorithmC(item, rawText = '') {
     text,
     item.keywords || []
   );
+  const rawKeywordCoverage =
+    item.keywords && item.keywords.length > 0
+      ? matchedKeywords.length / item.keywords.length
+      : 0.75;
   const conceptRecall =
     item.keywords && item.keywords.length > 0
-      ? Math.min(1, matchedKeywords.length / Math.max(2, Math.ceil(item.keywords.length * 0.52)))
+      ? Math.min(1, matchedKeywords.length / Math.max(2, Math.ceil(item.keywords.length * 0.62)))
       : 0.85;
 
   // 4. Syntactic Coherence & Anti-Keyword-Stuffing Gate
   const coherence = analyzeCoherenceAndSyntax(text, item.keywords || []);
   const hasStructure = coherence.connectorCount >= 1 || coherence.hasParagraphs;
 
-  // 5. Calibrated length & elaboration factor
+  // 5. Calibrated length & elaboration completeness curve (ANCE requires full development)
   const minW = Math.max(15, item.minWords || 30);
-  const lengthFactor = Math.min(1, Math.pow(wordCount / minW, 0.78));
+  const lengthRatio = Math.min(1.08, wordCount / minW);
+  const elaborationGate = lengthRatio < 0.85 ? 0.42 + 0.58 * (lengthRatio / 0.85) : 1.0;
 
   // 6. Deterministic ANCE Art. 59 Functional Text Signature Rule check
   let signatureWarning = null;
@@ -754,35 +765,40 @@ export function evaluateAlgorithmC(item, rawText = '') {
       );
 
     if (signedOtherName) {
-      signatureViolationPenalty = 0.35; // Penalizes Redactare/Anonymity rubric criterion
+      signatureViolationPenalty = 0.42; // Penalizes Redactare/Anonymity rubric criterion
       signatureWarning =
         'PENALIZARE ANCE Art. 59 (Semn Distinctiv Detectat): Ai semnat textul funcțional cu un alt nume decât cel impus în condiție! Conform regulamentului ANCE Republica Moldova, folosirea oricărui alt nume atrage depunctarea/anularea probei.';
     } else if (wordCount > 22 && !hasRequiredPersona) {
-      signatureViolationPenalty = 0.12;
+      signatureViolationPenalty = 0.18;
       signatureWarning =
         'ATENȚIE Barem ANCE Moldova (Art. 59): Nu uita să semnezi textul funcțional EXCLUSIV cu numele indicat în condiție (Alexei/Alexandra Munteanu sau Cezar/Cezara Răileanu), pentru a evita anularea lucrării pentru semn distinctiv!';
     }
   }
 
   // 7. Combine semantic, criterion, concept, length, and coherence signals
-  const calibratedModelSim = Math.min(1, modelSim.combined * 1.48);
+  const calibratedModelSim = Math.min(1, modelSim.combined * 1.26);
   let compositeRatio =
-    calibratedModelSim * 0.34 +
-    criteriaMeanSim * 0.24 +
-    conceptRecall * 0.22 +
-    lengthFactor * 0.12 +
-    coherence.coherenceScore * 0.08;
+    (calibratedModelSim * 0.30 +
+      criteriaMeanSim * 0.20 +
+      criteriaMetRatio * 0.16 +
+      conceptRecall * 0.24 +
+      coherence.coherenceScore * 0.10) *
+    elaborationGate;
 
   // Apply Syntactic Coherence Gate (blocks keyword-stuffing & gibberish)
   if (coherence.isKeywordStuffed) {
-    compositeRatio = Math.min(0.18, compositeRatio * coherence.coherenceScore);
+    compositeRatio = Math.min(0.06, compositeRatio * 0.12);
   } else if (coherence.coherenceScore < 0.55) {
-    compositeRatio *= coherence.coherenceScore + 0.25;
+    compositeRatio *= coherence.coherenceScore + 0.2;
   }
 
-  // Apply Off-Topic Gate: if semantic similarity to both modelAnswer and concepts is very low
-  if (modelSim.conceptCosine < 0.16 && conceptRecall < 0.2) {
-    compositeRatio = Math.min(0.12, compositeRatio * 0.25);
+  // Apply Off-Topic / Prompt-Specificity Gate:
+  // If TF-IDF overlap with the specific item's model answer is very low AND <20% of item concepts matched
+  if (modelSim.tfidfCosine < 0.16 && rawKeywordCoverage < 0.18) {
+    compositeRatio = Math.min(0.06, compositeRatio * 0.15);
+  } else if (rawKeywordCoverage <= 0.15 && wordCount < minW * 0.6) {
+    // Superficial 1-concept trap answer missing comparative/secondary criteria
+    compositeRatio = Math.min(0.32, compositeRatio * 0.62);
   }
 
   // Apply ANCE Art. 59 Signature Penalty if triggered

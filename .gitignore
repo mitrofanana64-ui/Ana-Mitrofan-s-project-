@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local data (student answers, ratings, caches) - never commit personal data
+/data/
+database.sqlite
+*.sqlite-wal
+*.sqlite-shm
