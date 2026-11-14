@@ -4,6 +4,7 @@ import Hero from './components/Hero';
 import Dashboard from './components/Dashboard';
 import SampleTests from './components/SampleTests';
 import About from './components/About';
+import EconomicsSection from './components/EconomicsSection';
 import Contact from './components/Contact';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
       <Dashboard />
       <SampleTests />
       <About />
+      <EconomicsSection />
       <Contact />
     </div>
   );

@@ -1,5 +1,12 @@
 import React from 'react';
-import { Sparkles, BookOpen, FileCheck2, Award, Mail } from 'lucide-react';
+import {
+  Sparkles,
+  BookOpen,
+  FileCheck2,
+  FlaskConical,
+  TrendingUp,
+  Mail
+} from 'lucide-react';
 
 const Navbar = () => {
   const scrollTo = (id) => {
@@ -24,47 +31,55 @@ const Navbar = () => {
                 Bac<span className="text-[#8B5CF6]">.ai</span>
               </span>
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#C4B5FD] border border-[#8B5CF6]/30">
-                R. Moldova • ANCE 100p
+                v2.0 R&amp;D • ANCE 100p
               </span>
             </div>
             <p className="text-[11px] text-gray-400 hidden sm:block">
-              Limba Română & Istoria Românilor și Universală
+              NLP Semantic, Benchmark N=120 &amp; Simulare BAC R. Moldova
             </p>
           </div>
         </div>
 
         {/* Navigation Links */}
-        <nav className="hidden md:flex items-center gap-2">
+        <nav className="hidden lg:flex items-center gap-1.5">
           <button
             onClick={() => scrollTo('dashboard')}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <BookOpen size={16} className="text-[#8B5CF6]" />
-            <span>Bibliotecă & Lecții</span>
+            <BookOpen size={15} className="text-[#8B5CF6]" />
+            <span>Bibliotecă &amp; RAG</span>
           </button>
 
           <button
             onClick={() => scrollTo('sample-tests')}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-[#8B5CF6]/15 hover:bg-[#8B5CF6]/25 border border-[#8B5CF6]/30 transition-all flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-[#8B5CF6]/15 hover:bg-[#8B5CF6]/25 border border-[#8B5CF6]/30 transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <FileCheck2 size={16} className="text-[#A78BFA]" />
-            <span>Teste BAC & Corector AI Live</span>
+            <FileCheck2 size={15} className="text-[#A78BFA]" />
+            <span>Simulare BAC (3 Algoritmi)</span>
           </button>
 
           <button
             onClick={() => scrollTo('about')}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <Award size={16} className="text-[#8B5CF6]" />
-            <span>Parcurs</span>
+            <FlaskConical size={15} className="text-[#8B5CF6]" />
+            <span>Cercetare &amp; Benchmark (N=120)</span>
+          </button>
+
+          <button
+            onClick={() => scrollTo('economics')}
+            className="px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <TrendingUp size={15} className="text-emerald-400" />
+            <span>Impact Economic (ROI)</span>
           </button>
 
           <button
             onClick={() => scrollTo('contact')}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <Mail size={16} className="text-[#8B5CF6]" />
-            <span>Contact</span>
+            <Mail size={15} className="text-[#8B5CF6]" />
+            <span>Pilotare &amp; Docs</span>
           </button>
         </nav>
 
@@ -73,7 +88,7 @@ const Navbar = () => {
           onClick={() => scrollTo('sample-tests')}
           className="px-4 py-2.5 rounded-xl bg-[#8B5CF6] hover:bg-[#7C3AED] text-white text-xs sm:text-sm font-bold shadow-lg shadow-[#8B5CF6]/25 transition-all cursor-pointer"
         >
-          Simulare BAC 100p →
+          Testează AI Live →
         </button>
       </div>
     </header>
