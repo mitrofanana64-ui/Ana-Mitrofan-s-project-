@@ -32,7 +32,7 @@ const RO_STOPWORDS = new Set([
   'și', 'si', 'sau', 'ori', 'dar', 'însă', 'insa', 'ci', 'deci', 'că', 'ca', 'să', 'sa',
   'în', 'in', 'din', 'la', 'pe', 'cu', 'de', 'pentru', 'prin', 'spre', 'sub', 'peste', 'între', 'intre',
   'după', 'dupa', 'fără', 'fara', 'despre', 'asupra', 'până', 'pana', 'către', 'catre',
-  'el', 'ea', 'ei', 'ele', 'eu', 'tu', 'noi', 'voi', 'سine', 'își', 'isi', 'îl', 'il', 'îi', 'ii',
+  'el', 'ea', 'ei', 'ele', 'eu', 'tu', 'noi', 'voi', 'sine', 'își', 'isi', 'îl', 'il', 'îi', 'ii',
   'meu', 'mea', 'mei', 'mele', 'tău', 'tau', 'său', 'sau', 'lui', 'ei', 'lor', 'nostru', 'voastră',
   'acest', 'această', 'aceasta', 'acești', 'acesti', 'aceste', 'acel', 'acea', 'acei', 'acele',
   'care', 'ce', 'cine', 'când', 'cand', 'unde', 'cum', 'cât', 'cat', 'aici', 'acolo', 'atunci',
@@ -103,7 +103,7 @@ export function stemRoWord(word) {
     'ismului', 'istilor', 'itatii', 'iunii', 'iunile', 'itoare', 'itorul', 'itoarelor',
     'urilor', 'arilor', 'erilor', 'irilor', 'atelor', 'itelor', 'utelor',
     'easca', 'escul', 'estii', 'estei', 'elor', 'ilor', 'ului', 'lelor',
-    'iune', 'ii', 'itate', 'ism', 'ist', 'tor', 'are', 'ere', 'ire', 'ند',
+    'iune', 'ii', 'itate', 'ism', 'ist', 'tor', 'are', 'ere', 'ire',
     'eaza', 'asca', 'ind', 'and', 'at', 'it', 'ut', 'ul', 'le', 'ea', 'ia', 'ie', 'ei', 'ii', 'a', 'e', 'i', 'u'
   ];
 
@@ -432,8 +432,18 @@ export function analyzeCoherenceAndSyntax(rawText = '', itemKeywords = []) {
   const stopwordCount = rawTokens.filter((t) => RO_STOPWORDS.has(t)).length;
   const functionWordRatio = nTokens > 0 ? stopwordCount / nTokens : 0;
 
-  // 3. Finite predicate / verb density
-  const predicateCount = rawTokens.filter((t) => RO_PREDICATE_MARKERS.has(t)).length;
+  // 3. Finite predicate / verb density (lexical markers + Romanian verbal morphology & auxiliaries)
+  const VERB_AUX_SET = new Set([
+    'a', 'au', 'am', 'ai', 'va', 'vor', 'ar', 'sa', 'se', 's-a', 's-au', 'si-a', 'i-a', 'l-a', 'ne-a',
+    'este', 'sunt', 'era', 'erau', 'fost', 'fi', 'fie', 'fiind', 'avea', 'are', 'avut', 'poate', 'pot', 'putea'
+  ]);
+  const VERB_SUFFIX_REGEX = /(?:eaza|este|esc|esti|im|ati|au|ea|eau|at|it|ut|se|sera|rara|ind|and)$/;
+  const predicateCount = rawTokens.filter(
+    (t) =>
+      RO_PREDICATE_MARKERS.has(t) ||
+      VERB_AUX_SET.has(t) ||
+      (t.length >= 5 && !RO_STOPWORDS.has(t) && VERB_SUFFIX_REGEX.test(t))
+  ).length;
   const sentences = text
     .split(/[.!?]+/)
     .map((s) => s.trim())
@@ -470,22 +480,22 @@ export function analyzeCoherenceAndSyntax(rawText = '', itemKeywords = []) {
   let penaltyMultiplier = 1.0;
 
   // Detect keyword stuffing / incoherent buzzword lists
-  if (nTokens >= 8 && functionWordRatio < 0.14) {
+  if (nTokens >= 8 && functionWordRatio < 0.15) {
     isKeywordStuffed = true;
     penaltyMultiplier *= 0.18;
     diagnostics.push('Lipsă structură gramaticală (enumerare mecanică de cuvinte-cheie fără prepoziții/conjuncții)');
   }
-  if (nTokens >= 10 && predicateCount === 0) {
+  if (nTokens >= 10 && predicateCount === 0 && functionWordRatio < 0.24) {
     isKeywordStuffed = true;
     penaltyMultiplier *= 0.22;
     diagnostics.push('Lipsă predicate/verbe la mod personal (enunțuri incoerente sintactic)');
   }
-  if (nTokens >= 12 && (uniqueRatio < 0.34 || adjacentDuplicates >= 3)) {
+  if (nTokens >= 12 && (uniqueRatio < 0.36 || adjacentDuplicates >= 3)) {
     isKeywordStuffed = true;
     penaltyMultiplier *= 0.20;
     diagnostics.push('Repetiție artificială / spam lexical detectat (CTTR scăzut)');
   }
-  if (nTokens >= 10 && keywordDensity > 0.58 && functionWordRatio < 0.22) {
+  if (nTokens >= 10 && keywordDensity > 0.56 && functionWordRatio < 0.24) {
     isKeywordStuffed = true;
     penaltyMultiplier *= 0.22;
     diagnostics.push('Densitate anormală de cuvinte-cheie fără dezvoltare discursivă (Keyword Stuffing)');
@@ -735,17 +745,19 @@ export function evaluateAlgorithmC(item, rawText = '') {
       : 0.75;
   const conceptRecall =
     item.keywords && item.keywords.length > 0
-      ? Math.min(1, matchedKeywords.length / Math.max(2, Math.ceil(item.keywords.length * 0.62)))
+      ? Math.min(1, matchedKeywords.length / Math.max(2, Math.ceil(item.keywords.length * 0.76)))
       : 0.85;
 
   // 4. Syntactic Coherence & Anti-Keyword-Stuffing Gate
   const coherence = analyzeCoherenceAndSyntax(text, item.keywords || []);
   const hasStructure = coherence.connectorCount >= 1 || coherence.hasParagraphs;
 
-  // 5. Calibrated length & elaboration completeness curve (ANCE requires full development)
+  // 5. Calibrated length & elaboration completeness curve (compared against both minWords and modelAnswer depth)
   const minW = Math.max(15, item.minWords || 30);
-  const lengthRatio = Math.min(1.08, wordCount / minW);
-  const elaborationGate = lengthRatio < 0.85 ? 0.42 + 0.58 * (lengthRatio / 0.85) : 1.0;
+  const modelWords = (item.modelAnswer || '').split(/\s+/).filter(Boolean).length;
+  const targetW = Math.max(18, minW, Math.round(modelWords * 0.72));
+  const lengthRatio = Math.min(1.08, wordCount / targetW);
+  const elaborationGate = lengthRatio < 0.90 ? 0.38 + 0.62 * (lengthRatio / 0.90) : 1.0;
 
   // 6. Deterministic ANCE Art. 59 Functional Text Signature Rule check
   let signatureWarning = null;

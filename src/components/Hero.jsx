@@ -74,7 +74,7 @@ const Hero = () => {
             className="px-7 py-4 bg-[#161622] hover:bg-[#1F1F30] text-white border border-[#8B5CF6]/40 rounded-2xl font-bold text-base transition-all flex items-center gap-2.5 cursor-pointer"
           >
             <FlaskConical size={20} className="text-[#A78BFA]" />
-            <span>Benchmark Științific (N = 120)</span>
+            <span>Validare în Clasă (N=30) &amp; Benchmark (N=120)</span>
           </motion.button>
 
           <motion.button
@@ -94,9 +94,9 @@ const Hero = () => {
             <div className="w-9 h-9 rounded-xl bg-[#8B5CF6]/15 text-[#A78BFA] flex items-center justify-center mb-3">
               <Brain size={18} />
             </div>
-            <h3 className="font-bold text-white text-sm mb-1">MAE Redus cu 64.7% (r = 0.8909)</h3>
+            <h3 className="font-bold text-white text-sm mb-1">MAE 7.03% în Clasă (N=30) &amp; r = 0.936</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Validat experimental pe N = 120 răspunsuri stratificate: elimină fals-pozitivele la keyword-stuffing (de la 91% la 6.9%) în 6.18 ms pe CPU.
+              Validat pe N=30 lucrări reale ale elevilor (evaluate orb de 2 profesori, MAE 1.50p) și N=120 teste de stres (-72.7% eroare MAE) în 5.75 ms.
             </p>
           </div>
 

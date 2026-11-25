@@ -63,7 +63,7 @@ const Navbar = () => {
             className="px-3.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:text-white hover:bg-[#191926] transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <FlaskConical size={15} className="text-[#8B5CF6]" />
-            <span>Cercetare &amp; Benchmark (N=120)</span>
+            <span>Cercetare &amp; Validare (N=150)</span>
           </button>
 
           <button

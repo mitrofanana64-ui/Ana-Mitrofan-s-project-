@@ -1,10 +1,14 @@
 /**
- * Bac.ai — Empirical N = 120 Benchmark Runner (Algorithms A, B, and C)
- * Computes MAE, RMSE, Pearson Correlation (r), Adversarial False-Positive Error,
- * Category Breakdowns, and CPU Inference Latency (ms).
+ * Bac.ai — Dual Empirical Benchmark Runner:
+ *  1) Real-World Classroom Field-Testing Validation (N_classroom = 30 unscripted 12th-grade student responses
+ *     blindly graded by two BAC teachers)
+ *  2) Controlled Stratified & Adversarial Stress-Test Benchmark (N_synthetic = 120 trials across 6 categories)
+ *  Total Validation Corpus: N_total = 150 trials across Algorithms A, B, and C.
  */
 
 import { generateBenchmarkDataset } from '../data/benchmarkDataset.js';
+import { CLASSROOM_FIELD_VALIDATION_SAMPLES } from '../data/classroomValidationData.js';
+import { SAMPLE_BAC_TESTS } from '../data/sampleTestsData.js';
 import {
   evaluateAlgorithmA,
   evaluateAlgorithmB,
@@ -30,7 +34,7 @@ function pearsonCorrelation(xs, ys) {
   return num / Math.sqrt(denX * denY);
 }
 
-function computeStats(humanPcts, predPcts, rawErrors, latencies, adversarialPredPcts) {
+function computeStats(humanPcts, predPcts, rawErrors, latencies, adversarialPredPcts = []) {
   const n = humanPcts.length;
   let absErrSum = 0;
   let sqErrSum = 0;
@@ -78,6 +82,111 @@ function computeStats(humanPcts, predPcts, rawErrors, latencies, adversarialPred
     adversarialFalsePositiveRatePct: Number(advFalsePositiveRate.toFixed(1)),
     meanLatencyMs: Number(meanLatencyMs.toFixed(2)),
     p95LatencyMs: Number(p95LatencyMs.toFixed(2))
+  };
+}
+
+export function runClassroomFieldValidation() {
+  const itemLookup = new Map();
+  SAMPLE_BAC_TESTS.forEach((test) => {
+    test.items.forEach((it) => {
+      itemLookup.set(it.id, it);
+    });
+  });
+
+  const humanPcts = [];
+  const t1Pcts = [];
+  const t2Pcts = [];
+  const algAPcts = [];
+  const algBPcts = [];
+  const algCPcts = [];
+
+  const rawErrA = [];
+  const rawErrB = [];
+  const rawErrC = [];
+
+  const latA = [];
+  const latB = [];
+  const latC = [];
+
+  const rows = [];
+
+  CLASSROOM_FIELD_VALIDATION_SAMPLES.forEach((sample) => {
+    const item = itemLookup.get(sample.itemId);
+    if (!item) return;
+
+    const resA = evaluateAlgorithmA(item, sample.studentText);
+    const resB = evaluateAlgorithmB(item, sample.studentText);
+    const resC = evaluateAlgorithmC(item, sample.studentText);
+
+    const hPct = Number(((sample.humanScore / sample.maxPoints) * 100).toFixed(1));
+    const t1Pct = Number(((sample.teacher1Score / sample.maxPoints) * 100).toFixed(1));
+    const t2Pct = Number(((sample.teacher2Score / sample.maxPoints) * 100).toFixed(1));
+
+    const aPct = Number(((resA.score / sample.maxPoints) * 100).toFixed(1));
+    const bPct = Number(((resB.score / sample.maxPoints) * 100).toFixed(1));
+    const cPct = Number(((resC.score / sample.maxPoints) * 100).toFixed(1));
+
+    humanPcts.push(hPct);
+    t1Pcts.push(t1Pct);
+    t2Pcts.push(t2Pct);
+
+    algAPcts.push(aPct);
+    algBPcts.push(bPct);
+    algCPcts.push(cPct);
+
+    rawErrA.push(Math.abs(sample.humanScore - resA.score));
+    rawErrB.push(Math.abs(sample.humanScore - resB.score));
+    rawErrC.push(Math.abs(sample.humanScore - resC.score));
+
+    latA.push(resA.latencyMs);
+    latB.push(resB.latencyMs);
+    latC.push(resC.latencyMs);
+
+    rows.push({
+      sampleId: sample.sampleId,
+      studentCode: sample.studentCode,
+      testId: sample.testId,
+      itemId: sample.itemId,
+      subject: sample.subject,
+      maxPoints: sample.maxPoints,
+      teacher1Score: sample.teacher1Score,
+      teacher2Score: sample.teacher2Score,
+      humanScore: sample.humanScore,
+      humanPct: hPct,
+      algAScore: resA.score,
+      algAPct: aPct,
+      algBScore: resB.score,
+      algBPct: bPct,
+      algCScore: resC.score,
+      algCPct: cPct,
+      rawErrorAlgC: Math.abs(sample.humanScore - resC.score),
+      cosineSim: resC.semanticSimilarity,
+      coherence: resC.coherenceScore,
+      teacherNote: sample.teacherNote,
+      studentExcerpt: sample.studentText.slice(0, 145) + (sample.studentText.length > 145 ? '...' : '')
+    });
+  });
+
+  const statsA = computeStats(humanPcts, algAPcts, rawErrA, latA);
+  const statsB = computeStats(humanPcts, algBPcts, rawErrB, latB);
+  const statsC = computeStats(humanPcts, algCPcts, rawErrC, latC);
+  const interTeacherR = Number(pearsonCorrelation(t1Pcts, t2Pcts).toFixed(4));
+
+  return {
+    nClassroom: rows.length,
+    interTeacherPearsonR: interTeacherR,
+    maeReductionVsBaselineAPct: Number(
+      (((statsA.maePct - statsC.maePct) / Math.max(0.01, statsA.maePct)) * 100).toFixed(1)
+    ),
+    maeReductionVsZeroShotBPct: Number(
+      (((statsB.maePct - statsC.maePct) / Math.max(0.01, statsB.maePct)) * 100).toFixed(1)
+    ),
+    algorithms: {
+      algA: statsA,
+      algB: statsB,
+      algC: statsC
+    },
+    samples: rows
   };
 }
 
@@ -201,11 +310,15 @@ export function runEmpiricalBenchmark() {
     maeAlgC: Number((c.errCSum / c.count).toFixed(1))
   }));
 
+  const classroomValidation = runClassroomFieldValidation();
+
   return {
     generatedAt: new Date().toISOString(),
     nTrials: trials.length,
+    nClassroomTrials: classroomValidation.nClassroom,
+    nTotalCombinedTrials: trials.length + classroomValidation.nClassroom,
     hypothesis:
-      'Cuplarea reprezentărilor vectoriale semantice multi-nivel (64-dim Concept-Latent + 256-dim Subword 3-gram + TF-IDF) cu descompunerea pe criterii a baremului ANCE și filtrul de coerență sintactică (Algoritmul C) reduce eroarea medie absolută (MAE) față de evaluarea umană cu >55% comparativ cu potrivirea euristică de cuvinte-cheie (Algoritmul A) și cu >40% față de modelul semantic zero-shot neconstrâns (Algoritmul B), reducând scorurile fals-pozitive la atacurile de tip keyword-stuffing cu >80% pe N = 120 răspunsuri BAC.',
+      'Cuplarea reprezentărilor vectoriale semantice multi-nivel (64-dim Concept-Latent + 256-dim Subword 3-gram + TF-IDF) cu descompunerea pe criterii a baremului ANCE și filtrul de coerență sintactică (Algoritmul C) reduce eroarea medie absolută (MAE) față de evaluarea umană cu >55% comparativ cu potrivirea euristică de cuvinte-cheie (Algoritmul A) și cu >40% față de modelul semantic zero-shot neconstrâns (Algoritmul B), atât pe lotul de stres sintetic (N = 120), cât și pe eșantionul de teren din clasă cu răspunsuri reale ale elevilor de clasa a XII-a evaluate orb de doi profesori (N_clasă = 30, N_total = 150).',
     summaryComparison: {
       maeReductionVsBaselineAPct: maeReductionVsA,
       maeReductionVsZeroShotBPct: maeReductionVsB,
@@ -229,6 +342,7 @@ export function runEmpiricalBenchmark() {
         ...statsC
       }
     },
+    classroomValidation,
     categoryBreakdown,
     sampleTrials: detailedRows.slice(0, 36),
     allTrials: detailedRows
