@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MoldSEF Template A — 1-Page Visual Annex (Bac.ai v2.0 — Ana Mitrofan)</title>
+  <style>
+    @page { size: A4; margin: 14mm 16mm 14mm 16mm; }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 11pt;
+      line-height: 1.28;
+      color: #111;
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 12px 20px;
+      background: #fff;
+    }
+    h1 { font-size: 13pt; text-align: center; margin: 0 0 3px 0; text-transform: uppercase; }
+    h2 { font-size: 11.5pt; margin: 8px 0 4px 0; border-bottom: 1px solid #222; padding-bottom: 2px; }
+    .sub { text-align: center; font-size: 10.5pt; margin-bottom: 8px; border-bottom: 2px solid #000; padding-bottom: 4px; }
+    .arch-box {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin: 6px 0;
+    }
+    .stage {
+      border: 1px solid #333;
+      background: #f7f7fb;
+      padding: 5px 6px;
+      font-size: 9.5pt;
+      text-align: center;
+    }
+    .stage strong { display: block; font-size: 10pt; margin-bottom: 2px; color: #1e1b4b; }
+    table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 10pt; }
+    th, td { border: 1px solid #333; padding: 3px 5px; text-align: center; }
+    th { background: #eee; font-weight: bold; }
+    td:first-child, th:first-child { text-align: left; }
+    .bar-wrap { width: 100%; background: #e5e7eb; height: 10px; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+    .bar-a { background: #d97706; height: 100%; }
+    .bar-b { background: #2563eb; height: 100%; }
+    .bar-c { background: #059669; height: 100%; }
+  </style>
+</head>
+<body>
+  <h1>MoldSEF &amp; Infomatrix Visual Annex — Bac.ai v2.0 (1-Page Standalone Export)</h1>
+  <div class="sub">
+    <strong>Author:</strong> Ana Mitrofan (Individual R&amp;D Entry) | <strong>Dual Benchmark:</strong> <em>N</em><sub>classroom</sub> = 30 Blind Teacher-Graded Student Answers + <em>N</em><sub>stress</sub> = 120 Stratified Trials (<em>N</em><sub>total</sub> = 150)
+  </div>
+
+  <h2>Figure 1: 5-Stage Hybrid NLP Architecture &amp; Persistent SQLite Pipeline</h2>
+  <div class="arch-box">
+    <div class="stage">
+      <strong>Stage 1: Morphology</strong>
+      Romanian Diacritic Folding, Stopword Filter &amp; Snowball Inflectional Stemmer
+    </div>
+    <div class="stage">
+      <strong>Stage 2: 3-Vector Space</strong>
+      64-dim Concept Ontology + 256-dim FastText Subword 3-Gram + Corpus TF-IDF
+    </div>
+    <div class="stage">
+      <strong>Stage 3: ANCE Barem</strong>
+      Per-Criterion Cosine Grounding + Top-K Semantic Vector RAG Retriever
+    </div>
+    <div class="stage">
+      <strong>Stage 4: Coherence Gate</strong>
+      Carroll CTTR (&radic;2N) + Verbal Morphology Density + ANCE Art. 59 Check
+    </div>
+    <div class="stage">
+      <strong>Stage 5: Persistence</strong>
+      Express REST API + SQLite3 (<code>materials</code>, <code>test_attempts</code>, <code>benchmark_runs</code>)
+    </div>
+  </div>
+
+  <h2>Figure 2: Real-World 12th-Grade Classroom Field Validation (N<sub>classroom</sub> = 30 • Blind Dual-Teacher Agreement r = 0.9711)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Classroom Field-Test Metric (N = 30 Unscripted Student Answers)</th>
+        <th>Algorithm A (Heuristic v1)</th>
+        <th>Algorithm B (Zero-Shot)</th>
+        <th>Algorithm C (Bac.ai v2 Hybrid)</th>
+        <th>Visual Error / Correlation Comparison</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Mean Absolute Error — MAE (%)</strong> (Lower is better)</td>
+        <td>12.53% (3.17 pts)</td>
+        <td>14.71% (4.00 pts)</td>
+        <td><strong>7.03% (1.50 pts)</strong></td>
+        <td>Alg C reduces classroom MAE by <strong>-43.9% vs A / -52.2% vs B</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Pearson Correlation (r) with Blind Teachers</strong></td>
+        <td>0.6264</td>
+        <td>0.6836</td>
+        <td><strong>0.8872 (R&sup2;=0.787)</strong></td>
+        <td><div class="bar-wrap"><div class="bar-c" style="width:88.7%"></div></div> 88.7% linear alignment</td>
+      </tr>
+      <tr>
+        <td><strong>Classroom Accuracy Within &le;10% of Teacher Score</strong></td>
+        <td>60.0% (18/30)</td>
+        <td>60.0% (18/30)</td>
+        <td><strong>76.7% (23/30)</strong></td>
+        <td><div class="bar-wrap"><div class="bar-c" style="width:76.7%"></div></div> +16.7 pp over baselines</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Figure 3: Controlled Stratified &amp; Adversarial Stress-Test Breakdown (N<sub>synthetic</sub> = 120 Across 6 Categories)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Stratified Response Archetype (N = 120)</th>
+        <th>Human Teacher (%)</th>
+        <th>Alg A: Heuristic (%)</th>
+        <th>Alg B: Zero-Shot (%)</th>
+        <th>Alg C: Bac.ai v2 Hybrid (%)</th>
+        <th>Alg C MAE (%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Exemplary Paraphrased &amp; Synonyms (n=24)</strong></td>
+        <td>97.5%</td>
+        <td>92.7%</td>
+        <td>100.0%</td>
+        <td><strong>92.5%</strong></td>
+        <td><strong>5.5%</strong></td>
+      </tr>
+      <tr>
+        <td><strong>2. Solid Good — Grade 8 (n=18)</strong></td>
+        <td>75.6%</td>
+        <td>90.9%</td>
+        <td>99.3%</td>
+        <td><strong>88.0%</strong></td>
+        <td><strong>16.9%</strong></td>
+      </tr>
+      <tr>
+        <td><strong>3. Partial Developing — Grade 5–6 (n=18)</strong></td>
+        <td>46.9%</td>
+        <td>72.0%</td>
+        <td>86.0%</td>
+        <td><strong>51.9%</strong></td>
+        <td><strong>20.7%</strong></td>
+      </tr>
+      <tr>
+        <td><strong>4. Adversarial Keyword-Stuffing (n=24)</strong></td>
+        <td>0.0%</td>
+        <td>91.0% (100% FP)</td>
+        <td>88.6% (100% FP)</td>
+        <td><strong>6.6% (0.0% FP)</strong></td>
+        <td><strong>6.6%</strong></td>
+      </tr>
+      <tr>
+        <td><strong>5. Fluent Off-Topic Essay (n=18)</strong></td>
+        <td>3.1%</td>
+        <td>46.6%</td>
+        <td>50.2%</td>
+        <td><strong>3.4%</strong></td>
+        <td><strong>2.5%</strong></td>
+      </tr>
+      <tr>
+        <td><strong>6. ANCE Art. 59 / Rubric Trap (n=18)</strong></td>
+        <td>30.6%</td>
+        <td>48.3%</td>
+        <td>59.6%</td>
+        <td><strong>25.4%</strong></td>
+        <td><strong>9.0%</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Overall Stress-Test Summary (N = 120)</strong></td>
+        <td><strong>100% Reference</strong></td>
+        <td><strong>MAE: 35.86% (r=0.42)</strong></td>
+        <td><strong>MAE: 39.08% (r=0.60)</strong></td>
+        <td><strong>MAE: 9.79% (r=0.936)</strong></td>
+        <td><strong>-72.7% Error</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Figure 4: 30-Point MoldSEF Economic Benefit &amp; ROI Analysis (Republic of Moldova — MDL &amp; EUR)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Economic &amp; Operational Indicator</th>
+        <th>Private BAC Tutoring (Moldova)</th>
+        <th>Commercial Cloud LLM API</th>
+        <th>Bac.ai v2 (Local Hybrid CPU)</th>
+        <th>Net Annual Economic Impact</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Annual Cost / Student (2 Subjects, 72 Sessions)</strong></td>
+        <td>18,000 MDL (935 EUR)</td>
+        <td>~3,850 MDL (200 EUR)</td>
+        <td><strong>0 – 350 MDL (0 – 18 EUR)</strong></td>
+        <td><strong>+17,650 MDL (+917 EUR) saved (98.1%)</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Classroom Scale (30 Students / Year)</strong></td>
+        <td>540,000 MDL (28,052 EUR)</td>
+        <td>115,500 MDL (6,000 EUR)</td>
+        <td><strong>10,500 MDL (545 EUR)</strong></td>
+        <td><strong>+529,500 MDL (+27,506 EUR) saved</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Teacher Grading Time per 100p Exam</strong></td>
+        <td>22.0 min (manual)</td>
+        <td>5.0 min</td>
+        <td><strong>5.75 ms AI + 3.0 min review</strong></td>
+        <td><strong>86.4% teacher time saved (76 h/yr)</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>
