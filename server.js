@@ -3,6 +3,7 @@ import cors from 'cors';
 import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { INITIAL_MATERIALS } from './src/data/materialsData.js';
 import { SAMPLE_BAC_TESTS, getMoldovaGrade } from './src/data/sampleTestsData.js';
@@ -376,8 +377,34 @@ app.use((req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Listen on BOTH 5173 (Main Web App) and 3001 (API port)
-const PORTS = [5173, 3001];
+// Free port 5173 if another app (e.g. an old project) is occupying it on Windows
+try {
+  const out = execSync('netstat -ano', { encoding: 'utf-8' });
+  const lines = out.split(/\r?\n/);
+  const pidsToKill = new Set();
+  for (const line of lines) {
+    if (line.includes(':5173 ') && line.includes('LISTENING')) {
+      const parts = line.trim().split(/\s+/);
+      const pid = Number(parts[parts.length - 1]);
+      if (pid && pid !== process.pid) {
+        pidsToKill.add(pid);
+      }
+    }
+  }
+  for (const pid of pidsToKill) {
+    try {
+      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+      console.log(`Freed port 5173 from previous process (PID ${pid}).`);
+    } catch {
+      // ignore if already stopped
+    }
+  }
+} catch {
+  // ignore if netstat not available
+}
+
+// Listen on 5173 (Main Web App), 5175 (Dedicated Backup Port), and 3001 (API/Web Port)
+const PORTS = [5173, 5175, 3001];
 PORTS.forEach((port) => {
   const srv = app.listen(port, '0.0.0.0', () => {
     console.log(`Bac.ai v2 R&D server running at http://localhost:${port}`);
